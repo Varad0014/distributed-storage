@@ -1,0 +1,15 @@
+# Go executable
+distributed-storage
+
+# Local storage
+storage/*
+!storage/.gitkeep
+
+# Test files
+*.txt
+
+# macOS
+.DS_Store
+
+# Environment variables
+.env
