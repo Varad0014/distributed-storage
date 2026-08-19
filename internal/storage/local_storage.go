@@ -4,6 +4,8 @@ import(
 	"os"
 	"io"
 	"path/filepath"
+	"crypto/sha256"
+	"encoding/hex"
 )
 
 
@@ -32,7 +34,19 @@ func (ls *LocalStorage) Save(name string, srcFile io.Reader)(uint64, error){
 	return uint64(bytes), nil
 }
 
-// func (ls *LocalStorage) 
+func (ls *LocalStorage) CheckSum(name string)(string, error){
+	path := filepath.Join(ls.basePath, name)
+	file, err := os.Open(path)
+	if err != nil{
+		return "", err
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil{
+		return "", err
+	}
+	return hex.EncodeToString(hash.Sum(nil)), nil
+}
 
 
 
@@ -57,13 +71,13 @@ func (ls *LocalStorage) List()([]os.FileInfo, error){
 	return fileList, nil
 }
 
-func (ls *LocalStorage) Open(name string) (*os.File, error){
-	path := filepath.Join(ls.basePath, name)
+func (ls *LocalStorage) Open(id string) (*os.File, error){
+	path := filepath.Join(ls.basePath, id)
 	return os.Open(path)
 }
 
-func (ls *LocalStorage) Delete(name string)(error){
-	path := filepath.Join(ls.basePath, name)
+func (ls *LocalStorage) Delete(id string)(error){
+	path := filepath.Join(ls.basePath, id)
 	return os.Remove(path)
 
 }

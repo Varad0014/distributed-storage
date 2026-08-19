@@ -2,8 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
+
 	"github.com/Varad0014/distributed-storage/internal/service"
 )
 
@@ -27,15 +29,15 @@ func (fh *FileHandler) Files(w http.ResponseWriter, r *http.Request){
 	}
 }
 func (fh *FileHandler) File(w http.ResponseWriter, r *http.Request){
-	name := strings.TrimPrefix(r.URL.Path, "/files/")
-	if name == ""{
-		http.Error(w, "file name not valid", http.StatusBadRequest)
+	id := strings.TrimPrefix(r.URL.Path, "/files/")
+	if id == ""{
+		http.Error(w, "file ID not valid", http.StatusBadRequest)
 	}
 	switch r.Method{
 	case http.MethodGet:
-		fh.download(w, r, name)
+		fh.download(w, r, id)
 	case http.MethodDelete:
-		fh.delete(w, r, name)
+		fh.delete(w, r, id)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -46,19 +48,23 @@ func (fh *FileHandler) upload(w http.ResponseWriter, r *http.Request){
 	maxMemory := (32<<20) //32Mb
 	if err := r.ParseMultipartForm(int64(maxMemory)); err != nil{
 		http.Error(w, "Invalid form", http.StatusBadRequest)
+		fmt.Println(err)
 		return
 	}
 	
 	file, header, err := r.FormFile("file")
 	if err != nil{
 		http.Error(w, "file not valid", http.StatusBadRequest)
+		fmt.Println(err)
 		return
 	}
 
 	defer file.Close()
-	result, err := fh.fileService.Upload(header.Filename, file)
+	result, err := fh.fileService.Upload(r.Context(), header.Filename, file)
 	if err != nil{
 		http.Error(w, "Error uploading file", http.StatusInternalServerError)
+		fmt.Println(err)
+		return
 	}
 	w.Header().Set("Content-type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -67,7 +73,8 @@ func (fh *FileHandler) upload(w http.ResponseWriter, r *http.Request){
 
 func (fh *FileHandler) list(w http.ResponseWriter, r *http.Request){
 
-	filesList, err := fh.fileService.List()
+	filesList, err := fh.fileService.List(r.Context())
+	fmt.Println(filesList)
 	if err != nil{
 		http.Error(w, "Could not retrive list", http.StatusInternalServerError)
 		return
@@ -77,9 +84,9 @@ func (fh *FileHandler) list(w http.ResponseWriter, r *http.Request){
 	json.NewEncoder(w).Encode(filesList)
 }
 
-func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, name string){
+func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, id string){
 
-	filesList, err := fh.fileService.Delete(name)
+	filesList, err := fh.fileService.Delete(r.Context(), id)
 	if err != nil{
 		http.Error(w, "Could not find list", http.StatusNotFound)
 		return
@@ -89,25 +96,20 @@ func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, name strin
 	json.NewEncoder(w).Encode(filesList)
 }
 
-func (fh *FileHandler) download(w http.ResponseWriter, r *http.Request, name string){
-	file, err := fh.fileService.Open(name)
+func (fh *FileHandler) download(w http.ResponseWriter, r *http.Request, id string){
+	fileMeta, file, err := fh.fileService.Get(r.Context(), id)
 	if err != nil{
 		http.Error(w, "Could not find for download", http.StatusNotFound)
 		return
 	}
 	defer file.Close()
-	info, err := file.Stat()
-	if err != nil{
-		http.Error(w, "Could not get fule info", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Disposition", "attachment; filename=\"" + info.Name() + "\"")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"" + fileMeta.Name + "\"")
 	
 	http.ServeContent(
 		w,
 		r,
-		info.Name(),
-		info.ModTime(),
+		fileMeta.Name,
+		fileMeta.CreatedAt,
 		file,
 	)
 
