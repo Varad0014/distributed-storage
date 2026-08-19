@@ -18,9 +18,11 @@ func main(){
 	if err != nil{
 		panic(err)
 	}
-
+	dbUrl := os.Getenv("DB_URL")
+	if dbUrl == ""{
+		dbUrl = "postgres://storage:storage@localhost:5432/storage"
+	}
 	ctx := context.Background()
-	dbUrl := "postgres://storage:storage@localhost:5432/storage"
 	db, err := pgx.Connect(ctx, dbUrl)
 	if err != nil{
 		panic(err)
