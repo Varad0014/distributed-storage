@@ -23,6 +23,7 @@ services:
       - "8080:8080"
     environment:
       DB_URL: "postgres://storage:storage@postgres:5432/storage?sslmode=disable"
+      MAX_UPLOAD_SIZE_MB: "100"
     volumes:
       - file_storage:/app/storage
     depends_on:

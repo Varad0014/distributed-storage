@@ -5,17 +5,21 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"errors"
 
 	"github.com/Varad0014/distributed-storage/internal/service"
+	"github.com/Varad0014/distributed-storage/internal/config"
+	appErrors "github.com/Varad0014/distributed-storage/internal/errors"
 )
 
 
 type FileHandler struct{
 	fileService *service.FileService
+	cfg *config.Config
 }
 
-func NewFileHandler(fileService *service.FileService) *FileHandler{
-	return &FileHandler{fileService: fileService}
+func NewFileHandler(fileService *service.FileService, config *config.Config) *FileHandler{
+	return &FileHandler{fileService: fileService, cfg: config}
 }
 
 func (fh *FileHandler) Files(w http.ResponseWriter, r *http.Request){
@@ -51,18 +55,28 @@ func (fh *FileHandler) upload(w http.ResponseWriter, r *http.Request){
 		fmt.Println(err)
 		return
 	}
-	
 	file, header, err := r.FormFile("file")
 	if err != nil{
 		http.Error(w, "file not valid", http.StatusBadRequest)
 		fmt.Println(err)
 		return
 	}
-
+	if uint64(header.Size) > fh.cfg.MAX_UPLOAD_SIZE_BYTES{
+		http.Error(w, "file size exceeds limit", http.StatusBadRequest)
+		fmt.Println("file size exceeds limit")
+		return
+	}
 	defer file.Close()
 	result, err := fh.fileService.Upload(r.Context(), header.Filename, file)
 	if err != nil{
-		http.Error(w, "Error uploading file", http.StatusInternalServerError)
+		switch {
+		case errors.Is(err, appErrors.ErrFileTooLarge):
+			http.Error(w, "file size exceeds limit", http.StatusRequestEntityTooLarge)
+		case errors.Is(err, appErrors.ErrInvalidFileName):
+			http.Error(w, "invalid file name", http.StatusBadRequest)
+		default:
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
 		fmt.Println(err)
 		return
 	}
@@ -74,7 +88,6 @@ func (fh *FileHandler) upload(w http.ResponseWriter, r *http.Request){
 func (fh *FileHandler) list(w http.ResponseWriter, r *http.Request){
 
 	filesList, err := fh.fileService.List(r.Context())
-	fmt.Println(filesList)
 	if err != nil{
 		http.Error(w, "Could not retrive list", http.StatusInternalServerError)
 		return
@@ -88,7 +101,11 @@ func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, id string)
 
 	filesList, err := fh.fileService.Delete(r.Context(), id)
 	if err != nil{
-		http.Error(w, "Could not find list", http.StatusNotFound)
+		if errors.Is(err, appErrors.ErrFileNotFound){
+			http.Error(w, "File not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-type", "application/json")
@@ -99,11 +116,15 @@ func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, id string)
 func (fh *FileHandler) download(w http.ResponseWriter, r *http.Request, id string){
 	fileMeta, file, err := fh.fileService.Get(r.Context(), id)
 	if err != nil{
-		http.Error(w, "Could not find for download", http.StatusNotFound)
+		if errors.Is(err, appErrors.ErrFileNotFound){
+			http.Error(w, "File not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	defer file.Close()
-	w.Header().Set("Content-Disposition", "attachment; filename=\"" + fileMeta.Name + "\"")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileMeta.Name))
 	
 	http.ServeContent(
 		w,

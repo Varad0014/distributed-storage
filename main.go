@@ -9,6 +9,7 @@ import (
 	"github.com/Varad0014/distributed-storage/internal/repository"
 	"github.com/Varad0014/distributed-storage/internal/service"
 	"github.com/Varad0014/distributed-storage/internal/storage"
+	"github.com/Varad0014/distributed-storage/internal/config"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,12 +19,9 @@ func main(){
 	if err != nil{
 		panic(err)
 	}
-	dbUrl := os.Getenv("DB_URL")
-	if dbUrl == ""{
-		dbUrl = "postgres://storage:storage@localhost:5432/storage"
-	}
+	cfg := config.LoadConfig()
 	ctx := context.Background()
-	db, err := pgx.Connect(ctx, dbUrl)
+	db, err := pgx.Connect(ctx, cfg.DB_URL)
 	if err != nil{
 		panic(err)
 	}
@@ -35,8 +33,8 @@ func main(){
 	}
 	localStorage := storage.NewLocalStorage(storageDir)
 	fileRepository := repository.NewFileRepository(db)
-	fileService := service.NewFileService(localStorage, fileRepository)
-	fileHandler := handler.NewFileHandler(fileService)
+	fileService := service.NewFileService(localStorage, fileRepository, cfg)
+	fileHandler := handler.NewFileHandler(fileService, cfg)
 	http.HandleFunc("/files", fileHandler.Files)
 	http.HandleFunc("/files/", fileHandler.File)
 	fmt.Println("Server is running on http://localhost:8080")

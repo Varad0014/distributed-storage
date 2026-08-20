@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"github.com/Varad0014/distributed-storage/internal/model"
 	"github.com/Varad0014/distributed-storage/internal/repository"
 	"github.com/Varad0014/distributed-storage/internal/storage"
+	"github.com/Varad0014/distributed-storage/internal/config"
+	appErrors "github.com/Varad0014/distributed-storage/internal/errors"
 	"github.com/google/uuid"
 )
 
@@ -19,10 +20,11 @@ import (
 type FileService struct{
 	localStorage *storage.LocalStorage
 	fileRepository *repository.FileRepository
+	cfg *config.Config
 }
 
-func NewFileService(localStorage *storage.LocalStorage, fileRepository *repository.FileRepository)(*FileService){
-	return &FileService{localStorage: localStorage, fileRepository: fileRepository}
+func NewFileService(localStorage *storage.LocalStorage, fileRepository *repository.FileRepository, cfg *config.Config)(*FileService){
+	return &FileService{localStorage: localStorage, fileRepository: fileRepository, cfg: cfg}
 }
 
 
@@ -30,13 +32,22 @@ func (fs *FileService) Upload(ctx context.Context, name string, src io.Reader)(*
 	// make sure filename is used
 	name = filepath.Base(name)
 	if name == "." || name == ""{
-		return nil, errors.New("Invalid file name")
+		return nil, appErrors.ErrInvalidFileName
 	}
+
 	Id := uuid.NewString()
-	bytes, err := fs.localStorage.Save(Id, src)
+	//check for max size
+	limitReader := io.LimitReader(src, int64(fs.cfg.MAX_UPLOAD_SIZE_BYTES)+1)
+
+	bytes, err := fs.localStorage.Save(Id, limitReader)
 	if err != nil{
 		return nil, err
 	}
+	if bytes > fs.cfg.MAX_UPLOAD_SIZE_BYTES{
+		_ = fs.localStorage.Delete(Id)
+		return nil, appErrors.ErrFileTooLarge
+	}
+
 	checksum, err := fs.localStorage.CheckSum(Id)
 	if err != nil{
 		_ = fs.localStorage.Delete(Id)
@@ -70,6 +81,10 @@ func (fs *FileService) Get(ctx context.Context, id string)(*model.File, *os.File
 	}
 	file, err := fs.localStorage.Open(fileMeta.Id)
 	if err != nil{
+		if os.IsNotExist(err){
+			return nil, nil, appErrors.ErrFileNotFound
+		}
+		fmt.Println(err)
 		return nil, nil, err
 	}
 	return fileMeta, file, nil
@@ -90,7 +105,7 @@ func (fs *FileService) Delete(ctx context.Context, id string) ([]model.File, err
 	if err != nil{
 		return nil, err
 	}
-	
+
 	fileList, err := fs.List(ctx)
 	if err != nil{
 		return nil, err
