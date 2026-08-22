@@ -35,11 +35,15 @@ func main(){
 	fileRepository := repository.NewFileRepository(db)
 	fileService := service.NewFileService(localStorage, fileRepository, cfg)
 	fileHandler := handler.NewFileHandler(fileService, cfg)
-	http.HandleFunc("/files", fileHandler.Files)
-	http.HandleFunc("/files/", fileHandler.File)
+	apiMux := http.NewServeMux()
+	apiMux.HandleFunc("/files", fileHandler.Files)
+	apiMux.HandleFunc("/files/", fileHandler.File)
+
 	fmt.Println("Server is running on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil{
+	if err := http.ListenAndServe(":8080", apiMux); err != nil{
 		panic(err)
 	}
+
+
 
 }

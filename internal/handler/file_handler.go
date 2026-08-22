@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"errors"
-
+	"io"
 	"github.com/Varad0014/distributed-storage/internal/service"
 	"github.com/Varad0014/distributed-storage/internal/config"
 	appErrors "github.com/Varad0014/distributed-storage/internal/errors"
@@ -36,6 +36,7 @@ func (fh *FileHandler) File(w http.ResponseWriter, r *http.Request){
 	id := strings.TrimPrefix(r.URL.Path, "/files/")
 	if id == ""{
 		http.Error(w, "file ID not valid", http.StatusBadRequest)
+		return
 	}
 	switch r.Method{
 	case http.MethodGet:
@@ -125,13 +126,10 @@ func (fh *FileHandler) download(w http.ResponseWriter, r *http.Request, id strin
 	}
 	defer file.Close()
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileMeta.Name))
-	
-	http.ServeContent(
-		w,
-		r,
-		fileMeta.Name,
-		fileMeta.CreatedAt,
-		file,
-	)
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if _, err := io.Copy(w, file); err != nil{
+		http.Error(w, "Failed to send file", http.StatusInternalServerError)
+		return
+	}
 
 }

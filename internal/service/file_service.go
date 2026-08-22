@@ -18,13 +18,13 @@ import (
 
 
 type FileService struct{
-	localStorage *storage.LocalStorage
+	storage storage.StorageNode
 	fileRepository *repository.FileRepository
 	cfg *config.Config
 }
 
-func NewFileService(localStorage *storage.LocalStorage, fileRepository *repository.FileRepository, cfg *config.Config)(*FileService){
-	return &FileService{localStorage: localStorage, fileRepository: fileRepository, cfg: cfg}
+func NewFileService(storage storage.StorageNode, fileRepository *repository.FileRepository, cfg *config.Config)(*FileService){
+	return &FileService{storage: storage, fileRepository: fileRepository, cfg: cfg}
 }
 
 
@@ -39,18 +39,18 @@ func (fs *FileService) Upload(ctx context.Context, name string, src io.Reader)(*
 	//check for max size
 	limitReader := io.LimitReader(src, int64(fs.cfg.MAX_UPLOAD_SIZE_BYTES)+1)
 
-	bytes, err := fs.localStorage.Save(Id, limitReader)
+	bytes, err := fs.storage.Save(Id, limitReader)
 	if err != nil{
 		return nil, err
 	}
 	if bytes > fs.cfg.MAX_UPLOAD_SIZE_BYTES{
-		_ = fs.localStorage.Delete(Id)
+		_ = fs.storage.Delete(Id)
 		return nil, appErrors.ErrFileTooLarge
 	}
 
-	checksum, err := fs.localStorage.CheckSum(Id)
+	checksum, err := fs.storage.Checksum(Id)
 	if err != nil{
-		_ = fs.localStorage.Delete(Id)
+		_ = fs.storage.Delete(Id)
 		fmt.Println(err)
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (fs *FileService) Upload(ctx context.Context, name string, src io.Reader)(*
 	}
 	err = fs.fileRepository.Create(ctx, file)
 	if err != nil{
-		_ = fs.localStorage.Delete(Id)
+		_ = fs.storage.Delete(Id)
 		fmt.Println(err)
 		return nil, err
 	}
@@ -74,12 +74,12 @@ func (fs *FileService) List(ctx context.Context)([]model.File, error){
 	return fs.fileRepository.GetAll(ctx)
 }
 
-func (fs *FileService) Get(ctx context.Context, id string)(*model.File, *os.File, error){
+func (fs *FileService) Get(ctx context.Context, id string)(*model.File, io.ReadCloser, error){
 	fileMeta, err := fs.fileRepository.GetByID(ctx, id)
 	if err != nil{
 		return nil, nil, err
 	}
-	file, err := fs.localStorage.Open(fileMeta.Id)
+	file, err := fs.storage.Open(fileMeta.Id)
 	if err != nil{
 		if os.IsNotExist(err){
 			return nil, nil, appErrors.ErrFileNotFound
@@ -96,7 +96,7 @@ func (fs *FileService) Delete(ctx context.Context, id string) ([]model.File, err
 		return nil, err
 	}
 
-	err = fs.localStorage.Delete(id)
+	err = fs.storage.Delete(id)
 	if err != nil{
 		return nil, err
 	}

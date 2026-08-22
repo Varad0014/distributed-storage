@@ -1,11 +1,12 @@
 package storage
 
-import(
-	"os"
-	"io"
-	"path/filepath"
+import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 )
 
 
@@ -18,8 +19,8 @@ func NewLocalStorage(path string) (*LocalStorage){
 }
 
 // os.File implements interface io.Reader, io.Writer
-func (ls *LocalStorage) Save(name string, srcFile io.Reader)(uint64, error){
-	path := filepath.Join(ls.basePath, name)
+func (ls *LocalStorage) Save(id string, srcFile io.Reader)(uint64, error){
+	path := filepath.Join(ls.basePath, id)
 	dstFile, err := os.Create(path)
 	if err != nil{
 		return 0, err
@@ -34,10 +35,11 @@ func (ls *LocalStorage) Save(name string, srcFile io.Reader)(uint64, error){
 	return uint64(bytes), nil
 }
 
-func (ls *LocalStorage) CheckSum(name string)(string, error){
-	path := filepath.Join(ls.basePath, name)
+func (ls *LocalStorage) Checksum(id string)(string, error){
+	path := filepath.Join(ls.basePath, id)
 	file, err := os.Open(path)
 	if err != nil{
+		fmt.Println(err)
 		return "", err
 	}
 	defer file.Close()
@@ -52,26 +54,26 @@ func (ls *LocalStorage) CheckSum(name string)(string, error){
 
 
 // return FileInfo, not model.File, we can handle it in service and return File
-func (ls *LocalStorage) List()([]os.FileInfo, error){
-	entries, err := os.ReadDir(ls.basePath)
-	if err != nil{
-		return nil, err
-	}
-	fileList := make([]os.FileInfo, 0)
-	for _, entry := range entries{
-		if entry.IsDir(){
-			continue
-		}
-		fileInfo, err := entry.Info()
-		if err != nil{
-			return nil, err
-		}
-		fileList = append(fileList, fileInfo)
-	}
-	return fileList, nil
-}
+// func (ls *LocalStorage) List()([]os.FileInfo, error){
+// 	entries, err := os.ReadDir(ls.basePath)
+// 	if err != nil{
+// 		return nil, err
+// 	}
+// 	fileList := make([]os.FileInfo, 0)
+// 	for _, entry := range entries{
+// 		if entry.IsDir(){
+// 			continue
+// 		}
+// 		fileInfo, err := entry.Info()
+// 		if err != nil{
+// 			return nil, err
+// 		}
+// 		fileList = append(fileList, fileInfo)
+// 	}
+// 	return fileList, nil
+// }
 
-func (ls *LocalStorage) Open(id string) (*os.File, error){
+func (ls *LocalStorage) Open(id string) (io.ReadCloser, error){
 	path := filepath.Join(ls.basePath, id)
 	return os.Open(path)
 }
@@ -80,4 +82,16 @@ func (ls *LocalStorage) Delete(id string)(error){
 	path := filepath.Join(ls.basePath, id)
 	return os.Remove(path)
 
+}
+
+func (ls *LocalStorage) Exists(id string)(bool, error){
+	path := filepath.Join(ls.basePath, id)
+	_, err := os.Stat(path)
+	if err != nil{
+		if os.IsNotExist(err){
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }

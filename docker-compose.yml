@@ -24,11 +24,19 @@ services:
     environment:
       DB_URL: "postgres://storage:storage@postgres:5432/storage?sslmode=disable"
       MAX_UPLOAD_SIZE_MB: "100"
-    volumes:
-      - file_storage:/app/storage
+      
     depends_on:
       postgres:
         condition: service_healthy
+
+  storage_node:
+    build: .
+    container_name: storage-node
+    command: /app/storage-node
+    ports:
+      - "8081:8081"
+    volumes:
+      - file_storage:/app/storage
 
 volumes:
   postgres_data:
