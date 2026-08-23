@@ -80,6 +80,7 @@ func (ls *LocalStorage) Open(id string) (io.ReadCloser, error){
 
 func (ls *LocalStorage) Delete(id string)(error){
 	path := filepath.Join(ls.basePath, id)
+	fmt.Println(path)
 	return os.Remove(path)
 
 }

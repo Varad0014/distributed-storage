@@ -76,6 +76,7 @@ func (fh *FileHandler) upload(w http.ResponseWriter, r *http.Request){
 		case errors.Is(err, appErrors.ErrInvalidFileName):
 			http.Error(w, "invalid file name", http.StatusBadRequest)
 		default:
+			fmt.Println(err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
 		fmt.Println(err)
@@ -106,6 +107,7 @@ func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, id string)
 			http.Error(w, "File not found", http.StatusNotFound)
 			return
 		}
+		fmt.Println(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

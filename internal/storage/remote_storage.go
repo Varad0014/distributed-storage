@@ -33,7 +33,7 @@ func NewRemoteStorage(baseURL string) *RemoteStorage{
 
 func (rs *RemoteStorage) Save(id string, srcFile io.Reader)(uint64, error){
 	url := fmt.Sprintf("%s/objects/%s", rs.baseURL, id)
-	req, err := http.NewRequest(http.MethodPut, url, srcFile)
+	req, err := http.NewRequest(http.MethodPost, url, srcFile)
 	if err != nil{
 		return 0, err
 	}
@@ -72,16 +72,20 @@ func (rs *RemoteStorage) Delete(id string) error{
 	url := fmt.Sprintf("%s/objects/%s", rs.baseURL, id)
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil{
+		// fmt.Println(err)
 		return err
 	}
 	resp, err := rs.client.Do(req)
 	if err != nil{
+		// fmt.Println(err)
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound{
+	if resp.StatusCode == http.StatusNotFound{
+		fmt.Println(resp.StatusCode)
 		return os.ErrNotExist
 	}
+	
 	if resp.StatusCode < 200 || resp.StatusCode >= 300{
 		return fmt.Errorf("failed to delete object, status code: %d", resp.StatusCode)
 	}

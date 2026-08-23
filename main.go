@@ -26,14 +26,18 @@ func main(){
 		panic(err)
 	}
 	defer db.Close(ctx)
-	fileRespository := repository.NewFileRepository(db)
-	err = fileRespository.CreateTable(ctx)
+	fileRepository := repository.NewFileRepository(db)
+	err = fileRepository.CreateTable(ctx)
 	if err != nil{
 		panic(err)
 	}
-	localStorage := storage.NewLocalStorage(storageDir)
-	fileRepository := repository.NewFileRepository(db)
-	fileService := service.NewFileService(localStorage, fileRepository, cfg)
+	// localStorage := storage.NewLocalStorage(storageDir)
+	node1 := storage.NewRemoteStorage(cfg.STORAGE_NODE_URL)
+	node2 := storage.NewRemoteStorage(cfg.STORAGE_NODE_URL_2)
+
+	replicationStorage := storage.NewReplicatedStorage(node1, node2)
+	// remoteStorage := storage.NewRemoteStorage(cfg.STORAGE_NODE_URL)
+	fileService := service.NewFileService(replicationStorage, fileRepository, cfg)
 	fileHandler := handler.NewFileHandler(fileService, cfg)
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("/files", fileHandler.Files)

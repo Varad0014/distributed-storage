@@ -93,11 +93,13 @@ func (fs *FileService) Get(ctx context.Context, id string)(*model.File, io.ReadC
 func (fs *FileService) Delete(ctx context.Context, id string) ([]model.File, error){
 	_, err := fs.fileRepository.GetByID(ctx, id)
 	if err != nil{
+		fmt.Println("ID not found")
 		return nil, err
 	}
 
 	err = fs.storage.Delete(id)
 	if err != nil{
+		fmt.Println("Delete id not found", err)
 		return nil, err
 	}
 

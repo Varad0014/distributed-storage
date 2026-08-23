@@ -70,6 +70,7 @@ func (s *StorageNodeServer) Delete(w http.ResponseWriter, r *http.Request){
 		return
 	}
 	err := s.storage.Delete(id)
+	fmt.Println("local storage delete failed", err)
 	if err != nil{
 		if errors.Is(err, os.ErrNotExist){
 			http.Error(w, "Object not found", http.StatusNotFound)
