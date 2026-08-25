@@ -7,6 +7,7 @@ import (
 	"io"
 	"errors"
 	"os"
+	"encoding/json"
 )
 
 
@@ -118,4 +119,18 @@ func (s *StorageNodeServer) Checksum(w http.ResponseWriter, r *http.Request){
 	w.Header().Set("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{"id": "%s", "checksum": "%s"}`, id, checksum)
+}
+
+func (s *StorageNodeServer) List(w http.ResponseWriter, r *http.Request){
+	objects, err := s.storage.List()
+	if err != nil {
+		http.Error(w, "failed to list objects", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(objects); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
 }

@@ -135,3 +135,36 @@ func (fh *FileHandler) download(w http.ResponseWriter, r *http.Request, id strin
 	}
 
 }
+
+func (fh *FileHandler) StorageHealth(w http.ResponseWriter, r *http.Request) {
+	statuses := fh.fileService.StorageStatuses()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(statuses); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}
+
+func (fh *FileHandler) SyncStorage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(
+			w,
+			"method not allowed",
+			http.StatusMethodNotAllowed,
+		)
+		return
+	}
+
+	if err := fh.fileService.SyncStorage(); err != nil {
+		http.Error(
+			w,
+			"storage synchronization failed",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("storage synchronized\n"))
+}

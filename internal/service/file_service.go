@@ -114,3 +114,22 @@ func (fs *FileService) Delete(ctx context.Context, id string) ([]model.File, err
 	}
 	return fileList, nil
 }
+
+func (fs *FileService) StorageStatuses() []storage.NodeStatus {
+	replicated, ok := fs.storage.(*storage.ReplicatedStorage)
+	if !ok {
+		return nil
+	}
+
+	return replicated.NodeStatuses()
+}
+
+func (fs *FileService) SyncStorage() error {
+	replicated, ok := fs.storage.(*storage.ReplicatedStorage)
+	if !ok {
+		return fmt.Errorf("storage does not support replication")
+	}
+
+	return replicated.Sync()
+}
+

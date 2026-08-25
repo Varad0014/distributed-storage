@@ -135,5 +135,43 @@ func (rs *RemoteStorage) Checksum(id string) (string, error){
 	return checksumResp.Checksum, nil
 }
 
+
+func (rs *RemoteStorage) HealthCheck() error{
+	url := fmt.Sprintf("%s/health", rs.baseURL)
+	resp, err := rs.client.Get(url)
+	if err != nil{
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK{
+		return fmt.Errorf("health check failed, status code: %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (rs *RemoteStorage) List() ([]string, error) {
+	resp, err := rs.client.Get(rs.baseURL + "/objects")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(
+			"storage node returned status %d",
+			resp.StatusCode,
+		)
+	}
+
+	var objects []string
+
+	if err := json.NewDecoder(resp.Body).Decode(&objects); err != nil {
+		return nil, err
+	}
+
+	return objects, nil
+}
+
 var _ StorageNode = (*RemoteStorage)(nil)
+var _ HealthChecker = (*RemoteStorage)(nil)
 

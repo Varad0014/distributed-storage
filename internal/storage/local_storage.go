@@ -36,8 +36,7 @@ func (ls *LocalStorage) Save(id string, srcFile io.Reader)(uint64, error){
 }
 
 func (ls *LocalStorage) Checksum(id string)(string, error){
-	path := filepath.Join(ls.basePath, id)
-	file, err := os.Open(path)
+	file, err := ls.Open(id)
 	if err != nil{
 		fmt.Println(err)
 		return "", err
@@ -50,28 +49,6 @@ func (ls *LocalStorage) Checksum(id string)(string, error){
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-
-
-
-// return FileInfo, not model.File, we can handle it in service and return File
-// func (ls *LocalStorage) List()([]os.FileInfo, error){
-// 	entries, err := os.ReadDir(ls.basePath)
-// 	if err != nil{
-// 		return nil, err
-// 	}
-// 	fileList := make([]os.FileInfo, 0)
-// 	for _, entry := range entries{
-// 		if entry.IsDir(){
-// 			continue
-// 		}
-// 		fileInfo, err := entry.Info()
-// 		if err != nil{
-// 			return nil, err
-// 		}
-// 		fileList = append(fileList, fileInfo)
-// 	}
-// 	return fileList, nil
-// }
 
 func (ls *LocalStorage) Open(id string) (io.ReadCloser, error){
 	path := filepath.Join(ls.basePath, id)
@@ -95,4 +72,23 @@ func (ls *LocalStorage) Exists(id string)(bool, error){
 		return false, err
 	}
 	return true, nil
+}
+
+func (ls *LocalStorage) List() ([]string, error) {
+	entries, err := os.ReadDir(ls.basePath)
+	if err != nil {
+		return nil, err
+	}
+
+	objects := make([]string, 0, len(entries))
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		objects = append(objects, entry.Name())
+	}
+
+	return objects, nil
 }

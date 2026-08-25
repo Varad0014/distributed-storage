@@ -12,6 +12,13 @@ func main() {
 	storageNodeServer := storage.NewStorageNodeServer(localStorage)
 	storageNodeMux := http.NewServeMux()
 	storageNodeMux.HandleFunc("/health", storageNodeServer.Health)
+	storageNodeMux.HandleFunc("/objects", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		storageNodeServer.List(w, r)
+	})
 	storageNodeMux.HandleFunc("/objects/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
