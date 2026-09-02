@@ -1,5 +1,5 @@
 package storage
 
-type HealthChecker interface{
+type HealthChecker interface {
 	HealthCheck() error
 }

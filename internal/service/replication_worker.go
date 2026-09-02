@@ -7,12 +7,12 @@ import (
 )
 
 type ReplicationWorker struct {
-	syncFunc func() error
+	syncFunc func(context.Context) error
 	interval time.Duration
 }
 
 func NewReplicationWorker(
-	syncFunc func() error,
+	syncFunc func(context.Context) error,
 	interval time.Duration,
 ) *ReplicationWorker {
 	return &ReplicationWorker{
@@ -28,7 +28,7 @@ func (w *ReplicationWorker) Start(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			if err := w.syncFunc(); err != nil {
+			if err := w.syncFunc(ctx); err != nil {
 				log.Printf("replication sync failed: %v", err)
 			}
 

@@ -24,21 +24,23 @@ services:
     environment:
       DB_URL: "postgres://storage:storage@postgres:5432/storage?sslmode=disable"
       MAX_UPLOAD_SIZE_MB: "100"
-      STORAGE_NODE_URL: "http://storage_node:8081"
-      STORAGE_NODE_URL_2: "http://storage_node_2:8081"
+      STORAGE_NODE_URLS: "http://storage_node_1:8081,http://storage_node_2:8081,http://storage_node_3:8081"
+      STORAGE_NODE_TOKEN: "${STORAGE_NODE_TOKEN}"
       
     depends_on:
       postgres:
         condition: service_healthy
 
-  storage_node:
+  storage_node_1:
     build: .
-    container_name: storage-node
+    container_name: storage-node-1
     command: /app/storage-node
     ports:
       - "8081:8081"
     volumes:
-      - file_storage:/app/storage
+      - file_storage_1:/app/storage
+    environment:
+      STORAGE_NODE_TOKEN: "${STORAGE_NODE_TOKEN}"
   
   storage_node_2:
     build: .
@@ -48,8 +50,23 @@ services:
       - "8082:8081"
     volumes:
       - file_storage_2:/app/storage
+    environment:
+      STORAGE_NODE_TOKEN: "${STORAGE_NODE_TOKEN}"
+
+  storage_node_3:
+    build: .
+    container_name: storage-node-3
+    command: /app/storage-node
+    ports:
+      - "8083:8081"
+    volumes:
+      - file_storage_3:/app/storage
+
+    environment:
+      STORAGE_NODE_TOKEN: "${STORAGE_NODE_TOKEN}"
 
 volumes:
   postgres_data:
-  file_storage:
+  file_storage_1:
   file_storage_2:
+  file_storage_3:

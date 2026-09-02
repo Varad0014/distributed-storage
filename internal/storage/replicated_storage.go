@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -66,15 +67,48 @@ func (rs *ReplicatedStorage) Save(id string, srcFile io.Reader) (uint64, error) 
 }
 
 func (rs *ReplicatedStorage) Open(id string) (io.ReadCloser, error) {
-	var lastErr error
-	for _, node := range rs.nodes {
+	if len(rs.nodes) == 0 {
+		return nil, fmt.Errorf(
+			"no storage nodes configured",
+		)
+	}
+
+	var nodeErrors []error
+	missingCount := 0
+
+	for i, node := range rs.nodes {
 		file, err := node.Open(id)
 		if err == nil {
 			return file, nil
 		}
-		lastErr = err
+
+		if errors.Is(err, os.ErrNotExist) {
+			missingCount++
+		}
+
+		nodeErrors = append(
+			nodeErrors,
+			fmt.Errorf(
+				"node %d: %w",
+				i,
+				err,
+			),
+		)
 	}
-	return nil, fmt.Errorf("failed to open object from all nodes: %v", lastErr)
+
+	if missingCount == len(rs.nodes) {
+		return nil, fmt.Errorf(
+			"object %s does not exist on any node: %w",
+			id,
+			os.ErrNotExist,
+		)
+	}
+
+	return nil, fmt.Errorf(
+		"object %s unavailable from all nodes: %w",
+		id,
+		errors.Join(nodeErrors...),
+	)
 }
 
 func (rs *ReplicatedStorage) Delete(id string) error {
@@ -156,68 +190,16 @@ func (rs *ReplicatedStorage) List() ([]string, error) {
 	return result, nil
 }
 
-func (rs *ReplicatedStorage) Sync() error {
-	if len(rs.nodes) < 2 {
-		return nil
-	}
+func (rs *ReplicatedStorage) Sync(expectedChecksums map[string]string) error {
+	var syncErrors []error
 
-	for i, source := range rs.nodes {
-		sourceObjects, err := source.List()
-		if err != nil {
-			continue
-		}
-
-		for j, destination := range rs.nodes {
-			if i == j {
-				continue
-			}
-
-			destinationObjects, err := destination.List()
-			if err != nil {
-				continue
-			}
-
-			destinationSet := make(map[string]struct{})
-
-			for _, id := range destinationObjects {
-				destinationSet[id] = struct{}{}
-			}
-
-			for _, id := range sourceObjects {
-				// File doesn't exist on destination.
-				if _, exists := destinationSet[id]; !exists {
-					if err := rs.replicateObject(
-						source,
-						destination,
-						id,
-					); err != nil {
-						return err
-					}
-
-					continue
-				}
-
-				// File exist on both
-				sourceChecksum, err := source.Checksum(id)
-				if err != nil {
-					continue
-				}
-
-				destinationChecksum, err := destination.Checksum(id)
-				if err != nil {
-					continue
-				}
-
-				if sourceChecksum != destinationChecksum {
-					// Corrupt
-					if err := rs.replicateObject(source, destination, id); err != nil {
-						return err
-					}
-				}
-			}
+	for id, expectedChecksum := range expectedChecksums {
+		if err := rs.repairObject(id, expectedChecksum); err != nil {
+			syncErrors = append(syncErrors, err)
 		}
 	}
-	return nil
+
+	return errors.Join(syncErrors...)
 }
 
 func (rs *ReplicatedStorage) replicateObject(source StorageNode, destination StorageNode, id string) error {
@@ -241,4 +223,83 @@ func (rs *ReplicatedStorage) replicateObject(source StorageNode, destination Sto
 	}
 
 	return nil
+}
+
+func (rs *ReplicatedStorage) repairObject(id string, expectedChecksum string) error {
+	sourceIndex := -1
+
+	// Find a replica that agrees with PostgreSQL.
+	for i, node := range rs.nodes {
+		checksum, err := node.Checksum(id)
+		if err != nil {
+			continue
+		}
+
+		if checksum == expectedChecksum {
+			sourceIndex = i
+			break
+		}
+	}
+
+	if sourceIndex == -1 {
+		return fmt.Errorf(
+			"no valid replica found for object %s",
+			id,
+		)
+	}
+
+	source := rs.nodes[sourceIndex]
+	var repairErrors []error
+
+	for i, destination := range rs.nodes {
+		if i == sourceIndex {
+			continue
+		}
+
+		checksum, err := destination.Checksum(id)
+
+		// This replica is already correct.
+		if err == nil && checksum == expectedChecksum {
+			continue
+		}
+
+		// Replica is missing, unavailable, or corrupted.
+		if err := rs.replicateObject(
+			source,
+			destination,
+			id,
+		); err != nil {
+			repairErrors = append(
+				repairErrors,
+				fmt.Errorf("repair node %d: %w", i, err),
+			)
+			continue
+		}
+
+		// Do not assume that Save produced correct bytes.
+		repairedChecksum, err := destination.Checksum(id)
+		if err != nil {
+			repairErrors = append(
+				repairErrors,
+				fmt.Errorf(
+					"verify repaired object on node %d: %w",
+					i,
+					err,
+				),
+			)
+			continue
+		}
+
+		if repairedChecksum != expectedChecksum {
+			repairErrors = append(
+				repairErrors,
+				fmt.Errorf(
+					"repair verification failed on node %d",
+					i,
+				),
+			)
+		}
+	}
+
+	return errors.Join(repairErrors...)
 }

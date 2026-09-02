@@ -1,37 +1,36 @@
 package storage
 
 import (
-	"fmt"
-	"net/http"
-	"strings"
-	"io"
-	"errors"
-	"os"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strings"
 )
 
-
-type StorageNodeServer struct{
+type StorageNodeServer struct {
 	storage StorageNode
 }
 
-func NewStorageNodeServer(storage StorageNode) *StorageNodeServer{
+func NewStorageNodeServer(storage StorageNode) *StorageNodeServer {
 	return &StorageNodeServer{storage: storage}
 }
 
-func (s *StorageNodeServer) Health(w http.ResponseWriter, r *http.Request){
+func (s *StorageNodeServer) Health(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, "Storage node is healthy")
 }
 
-func (s *StorageNodeServer) Put(w http.ResponseWriter, r *http.Request){
+func (s *StorageNodeServer) Put(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/objects/")
-	if id == ""{
+	if err := validateObjectId(id); err != nil {
 		http.Error(w, "object ID not valid", http.StatusBadRequest)
 		return
 	}
 	size, err := s.storage.Save(id, r.Body)
-	if err != nil{
+	if err != nil {
 		http.Error(w, "Failed to save object", http.StatusInternalServerError)
 		return
 	}
@@ -40,15 +39,15 @@ func (s *StorageNodeServer) Put(w http.ResponseWriter, r *http.Request){
 	fmt.Fprintf(w, `{"id": "%s", "size": %d}`, id, size)
 }
 
-func (s *StorageNodeServer) Get(w http.ResponseWriter, r *http.Request){
+func (s *StorageNodeServer) Get(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/objects/")
-	if id == ""{
+	if err := validateObjectId(id); err != nil {
 		http.Error(w, "object ID not valid", http.StatusBadRequest)
 		return
 	}
 	file, err := s.storage.Open(id)
-	if err != nil{
-		if errors.Is(err, os.ErrNotExist){
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			http.Error(w, "Object not found", http.StatusNotFound)
 			return
 		}
@@ -58,22 +57,22 @@ func (s *StorageNodeServer) Get(w http.ResponseWriter, r *http.Request){
 	defer file.Close()
 	w.Header().Set("Content-type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(w, file); err != nil{
+	if _, err := io.Copy(w, file); err != nil {
 		http.Error(w, "Failed to send object", http.StatusInternalServerError)
 		return
 	}
 }
 
-func (s *StorageNodeServer) Delete(w http.ResponseWriter, r *http.Request){
+func (s *StorageNodeServer) Delete(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/objects/")
-	if id == ""{
+	if err := validateObjectId(id); err != nil {
 		http.Error(w, "object ID not valid", http.StatusBadRequest)
 		return
 	}
 	err := s.storage.Delete(id)
 	fmt.Println("local storage delete failed", err)
-	if err != nil{
-		if errors.Is(err, os.ErrNotExist){
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			http.Error(w, "Object not found", http.StatusNotFound)
 			return
 		}
@@ -83,33 +82,33 @@ func (s *StorageNodeServer) Delete(w http.ResponseWriter, r *http.Request){
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *StorageNodeServer) Head(w http.ResponseWriter, r *http.Request){
+func (s *StorageNodeServer) Head(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/objects/")
-	if id == ""{
+	if err := validateObjectId(id); err != nil {
 		http.Error(w, "object ID not valid", http.StatusBadRequest)
 		return
 	}
 	exists, err := s.storage.Exists(id)
-	if err != nil{
+	if err != nil {
 		http.Error(w, "Failed to check object existence", http.StatusInternalServerError)
 		return
 	}
-	if !exists{
+	if !exists {
 		http.Error(w, "Object not found", http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *StorageNodeServer) Checksum(w http.ResponseWriter, r *http.Request){
+func (s *StorageNodeServer) Checksum(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/objects-checksum/")
-	if id == ""{
+	if err := validateObjectId(id); err != nil {
 		http.Error(w, "object ID not valid", http.StatusBadRequest)
 		return
 	}
 	checksum, err := s.storage.Checksum(id)
-	if err != nil{
-		if errors.Is(err, os.ErrNotExist){
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			http.Error(w, "Object not found", http.StatusNotFound)
 			return
 		}
@@ -121,7 +120,7 @@ func (s *StorageNodeServer) Checksum(w http.ResponseWriter, r *http.Request){
 	fmt.Fprintf(w, `{"id": "%s", "checksum": "%s"}`, id, checksum)
 }
 
-func (s *StorageNodeServer) List(w http.ResponseWriter, r *http.Request){
+func (s *StorageNodeServer) List(w http.ResponseWriter, r *http.Request) {
 	objects, err := s.storage.List()
 	if err != nil {
 		http.Error(w, "failed to list objects", http.StatusInternalServerError)

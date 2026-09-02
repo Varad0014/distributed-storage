@@ -2,28 +2,28 @@ package handler
 
 import (
 	"encoding/json"
-	"fmt"
-	"net/http"
-	"strings"
 	"errors"
-	"io"
-	"github.com/Varad0014/distributed-storage/internal/service"
+	"fmt"
 	"github.com/Varad0014/distributed-storage/internal/config"
 	appErrors "github.com/Varad0014/distributed-storage/internal/errors"
+	"github.com/Varad0014/distributed-storage/internal/service"
+	"github.com/google/uuid"
+	"io"
+	"net/http"
+	"strings"
 )
 
-
-type FileHandler struct{
+type FileHandler struct {
 	fileService *service.FileService
-	cfg *config.Config
+	cfg         *config.Config
 }
 
-func NewFileHandler(fileService *service.FileService, config *config.Config) *FileHandler{
+func NewFileHandler(fileService *service.FileService, config *config.Config) *FileHandler {
 	return &FileHandler{fileService: fileService, cfg: config}
 }
 
-func (fh *FileHandler) Files(w http.ResponseWriter, r *http.Request){
-	switch r.Method{
+func (fh *FileHandler) Files(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
 	case http.MethodGet:
 		fh.list(w, r)
 	case http.MethodPost:
@@ -32,13 +32,23 @@ func (fh *FileHandler) Files(w http.ResponseWriter, r *http.Request){
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
-func (fh *FileHandler) File(w http.ResponseWriter, r *http.Request){
+func (fh *FileHandler) File(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/files/")
-	if id == ""{
+	if id == "" {
 		http.Error(w, "file ID not valid", http.StatusBadRequest)
 		return
 	}
-	switch r.Method{
+	parsedID, err := uuid.Parse(id)
+	if err != nil || parsedID.String() != id {
+		http.Error(
+			w,
+			"invalid file ID",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	switch r.Method {
 	case http.MethodGet:
 		fh.download(w, r, id)
 	case http.MethodDelete:
@@ -48,28 +58,28 @@ func (fh *FileHandler) File(w http.ResponseWriter, r *http.Request){
 	}
 }
 
-func (fh *FileHandler) upload(w http.ResponseWriter, r *http.Request){
+func (fh *FileHandler) upload(w http.ResponseWriter, r *http.Request) {
 	// if memory less than maxMemory, stored in RAM, otherwise temp file
-	maxMemory := (32<<20) //32Mb
-	if err := r.ParseMultipartForm(int64(maxMemory)); err != nil{
+	maxMemory := (32 << 20) //32Mb
+	if err := r.ParseMultipartForm(int64(maxMemory)); err != nil {
 		http.Error(w, "Invalid form", http.StatusBadRequest)
 		fmt.Println(err)
 		return
 	}
 	file, header, err := r.FormFile("file")
-	if err != nil{
+	if err != nil {
 		http.Error(w, "file not valid", http.StatusBadRequest)
 		fmt.Println(err)
 		return
 	}
-	if uint64(header.Size) > fh.cfg.MAX_UPLOAD_SIZE_BYTES{
+	if uint64(header.Size) > fh.cfg.MAX_UPLOAD_SIZE_BYTES {
 		http.Error(w, "file size exceeds limit", http.StatusBadRequest)
 		fmt.Println("file size exceeds limit")
 		return
 	}
 	defer file.Close()
 	result, err := fh.fileService.Upload(r.Context(), header.Filename, file)
-	if err != nil{
+	if err != nil {
 		switch {
 		case errors.Is(err, appErrors.ErrFileTooLarge):
 			http.Error(w, "file size exceeds limit", http.StatusRequestEntityTooLarge)
@@ -87,10 +97,10 @@ func (fh *FileHandler) upload(w http.ResponseWriter, r *http.Request){
 	json.NewEncoder(w).Encode(result)
 }
 
-func (fh *FileHandler) list(w http.ResponseWriter, r *http.Request){
+func (fh *FileHandler) list(w http.ResponseWriter, r *http.Request) {
 
 	filesList, err := fh.fileService.List(r.Context())
-	if err != nil{
+	if err != nil {
 		http.Error(w, "Could not retrive list", http.StatusInternalServerError)
 		return
 	}
@@ -99,11 +109,11 @@ func (fh *FileHandler) list(w http.ResponseWriter, r *http.Request){
 	json.NewEncoder(w).Encode(filesList)
 }
 
-func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, id string){
+func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, id string) {
 
 	filesList, err := fh.fileService.Delete(r.Context(), id)
-	if err != nil{
-		if errors.Is(err, appErrors.ErrFileNotFound){
+	if err != nil {
+		if errors.Is(err, appErrors.ErrFileNotFound) {
 			http.Error(w, "File not found", http.StatusNotFound)
 			return
 		}
@@ -116,10 +126,10 @@ func (fh *FileHandler) delete(w http.ResponseWriter, r *http.Request, id string)
 	json.NewEncoder(w).Encode(filesList)
 }
 
-func (fh *FileHandler) download(w http.ResponseWriter, r *http.Request, id string){
+func (fh *FileHandler) download(w http.ResponseWriter, r *http.Request, id string) {
 	fileMeta, file, err := fh.fileService.Get(r.Context(), id)
-	if err != nil{
-		if errors.Is(err, appErrors.ErrFileNotFound){
+	if err != nil {
+		if errors.Is(err, appErrors.ErrFileNotFound) {
 			http.Error(w, "File not found", http.StatusNotFound)
 			return
 		}
@@ -129,7 +139,7 @@ func (fh *FileHandler) download(w http.ResponseWriter, r *http.Request, id strin
 	defer file.Close()
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileMeta.Name))
 	w.Header().Set("Content-Type", "application/octet-stream")
-	if _, err := io.Copy(w, file); err != nil{
+	if _, err := io.Copy(w, file); err != nil {
 		http.Error(w, "Failed to send file", http.StatusInternalServerError)
 		return
 	}
@@ -156,7 +166,7 @@ func (fh *FileHandler) SyncStorage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := fh.fileService.SyncStorage(); err != nil {
+	if err := fh.fileService.SyncStorage(r.Context()); err != nil {
 		http.Error(
 			w,
 			"storage synchronization failed",
